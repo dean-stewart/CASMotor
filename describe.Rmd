@@ -68,6 +68,12 @@ ggplot(motor,aes(Exposure)) +
 ggplot(motor,aes(ClaimNb)) +
   geom_histogram()
 
+#reading the marking guide tells us what these variables are
+#cap esposure at 1 and cap numbers at 4 'because the larger ones ae probably data errors'
+
+motor$Exposure <- pmin(motor$Exposure,1)
+motor$ClaimNb <- pmin(motor$ClaimNb,1)
+motor <- mutate(motor,ClaimFreq = ClaimNb/Exposure)
 
 ```
 
@@ -151,5 +157,53 @@ ggplot(motor,aes(ClaimFreq, VehGas)) +
 ggplot(motor,aes(ClaimFreq, Region)) +
   geom_point()
          
+```
+
+There are a couple of regions with outlier claim frequency (probably regions withlow exposures)
+Vehicle power and claim frequency seems negatively correlated
+VEhicle age also seens negatively correlated.  
+
+Are there confounders?
+
+younger drivers have more claims - traditiona wisdom
+
+those with more claims have less bonus - duh
+
+2iv
+```{r}
+summary_density <- motor %>% mutate(logden = log(Density))
+
+summary_density <- summary_density %>%
+  mutate(logdengroup = case_when(logden<=1~1,
+                    logden>1&logden<=2~2,
+                    logden>2&logden<=3~3,
+                    logden>3&logden<=4~4,
+                    logden>4&logden<=5~5,
+                    logden>5&logden<=6~6,
+                    logden>6&logden<=7~7,
+                    logden>7&logden<=8~8,
+                    logden>8&logden<=9~9,
+                    logden>9~10))
+summary_density$logdengroup <- as.integer(summary_density$logdengroup)
+
+logden_exposure <- ggplot(summary_density,aes(as_factor(logdengroup),Exposure)) +
+  geom_boxplot()
+
+
+summary_density %>% select(logdengroup,ClaimFreq) %>%
+  group_by(logdengroup) %>%
+  mutate(meanfreq = mean(ClaimFreq)) %>%
+  ggplot(aes(as_factor(logdengroup),meanfreq)) +
+  geom_point()
+
+logden_freq <- summary_density %>% select(logdengroup,ClaimFreq) %>%
+  group_by(logdengroup) %>%
+  mutate(meanfreq = mean(ClaimFreq)) %>%
+  ggplot(aes(logdengroup,meanfreq)) +
+  geom_point()
+
+library(gridExtra)
+grid.arrange(logden_exposure,logden_freq)
+
 ```
 
