@@ -45,4 +45,111 @@ whatsthis <- data.frame(prop.table(table(motor$Area)))
 whatsthis %>% filter(whatsthis$Var1=="F")
 whatsthis[whatsthis$Var1=="F",]
 ```
+## Week 4 Question 2
+2i
+```{r}
+glimpse(motor)
+
+#question talks of claim frequency assume this means ClainNb / Exposure
+
+motor <- mutate(motor,ClaimFreq = ClaimNb/Exposure)
+
+library(ggplot2)
+motor %>%
+  ggplot(aes(Exposure)) +
+  geom_histogram(binwidth=1)
+
+ggplot(motor,aes(Exposure)) +
+  geom_histogram()
+
+ggplot(motor,aes(Exposure)) +
+  geom_boxplot()
+
+ggplot(motor,aes(ClaimNb)) +
+  geom_histogram()
+
+
+```
+
+What do I see?  A low number a claims but a wide variation in exposure.
+
+2ii
+```{r}
+overall_freq = sum(motor$ClaimNb) / sum(motor$Exposure)  
+overall_freq
+
+```
+2iii
+```{r}
+glimpse(motor)
+glimpse(motor[,c(2,3,5:8)])
+#pairs(motor[,c(2,3,5:8,11,13)])  DON'T DO THIS!! TOO SLOW
+library(corrplot)
+corrplot(cor(motor[,c(2,3,5:8,11,13)]), use="pairwise.complete.obs")
+
+#column plots
+ggplot(motor,aes(Exposure, Area)) +
+  geom_col()
+
+ggplot(motor,aes(Exposure, VehPower)) +
+  geom_col()
+
+ggplot(motor,aes(Exposure, VehAge)) +
+  geom_col()
+
+ggplot(motor,aes(Exposure, DrivAge)) +
+  geom_col()
+
+ggplot(motor,aes(Exposure, BonusMalus)) +
+  geom_col()
+
+ggplot(motor,aes(Exposure, VehBrand)) +
+  geom_col()
+
+ggplot(motor,aes(Exposure, VehGas)) +
+  geom_col()
+
+ggplot(motor,aes(Exposure, Region)) +
+  geom_col()
+         
+```
+
+Bonus Malus is negatively correlated with driver age
+Exposure is higher for older drivers and vehicles
+high exposure areas are low bonus malus areas
+no major correlations between claimFreq and anything else
+
+Area F has a low exposure
+large variation on brand and region
+
+continuous variables don't plot - of couare.
+
+
+```{r}
+#scatter plots
+ggplot(motor,aes(ClaimFreq, Area)) +
+  geom_point()
+
+ggplot(motor,aes(ClaimFreq, VehPower)) +
+  geom_point()
+
+ggplot(motor,aes(ClaimFreq, VehAge)) +
+  geom_point()
+
+ggplot(motor,aes(ClaimFreq, DrivAge)) +
+  geom_point()
+
+ggplot(motor,aes(ClaimFreq, BonusMalus)) +
+  geom_point()
+
+ggplot(motor,aes(ClaimFreq, VehBrand)) +
+  geom_point()
+
+ggplot(motor,aes(ClaimFreq, VehGas)) +
+  geom_point()
+
+ggplot(motor,aes(ClaimFreq, Region)) +
+  geom_point()
+         
+```
 
