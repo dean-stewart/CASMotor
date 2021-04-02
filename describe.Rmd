@@ -90,8 +90,13 @@ overall_freq
 glimpse(motor)
 glimpse(motor[,c(2,3,5:8)])
 #pairs(motor[,c(2,3,5:8,11,13)])  DON'T DO THIS!! TOO SLOW
+
+#try this instead
+library(GGally)
+#ggpairs(motor[,c(2,3,5:8,11,13)]) - I think this was even slower!  It wsa doing more though...
+
 library(corrplot)
-corrplot(cor(motor[,c(2,3,5:8,11,13)]), use="pairwise.complete.obs")
+corrplot(cor(motor[,c(2,3,5:8,11,13)]), use="pairwise.complete.obs")  #and this is pretty lame - just a coloured correlation matrix really.
 
 #column plots
 ggplot(motor,aes(Exposure, Area)) +

@@ -1,0 +1,250 @@
+---
+title: "easter"
+author: "Dean Stewart"
+date: "25/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("psych")
+#install.packages("janitor")
+#install.packages("xts")
+#install.packages("zoo")
+#install.packages("sp")
+#install.packages("CASdatasets", repos = "http://cas.uqam.ca/pub/", type="source")
+library(tidyverse)
+library(CASdatasets)
+data("freMTPLsev")
+data("freMTPLfreq")
+glimpse(freMTPLsev)
+frequency <- freMTPLfreq
+severity <- freMTPLsev
+severity$PolicyID <- as_factor(severity$PolicyID)
+combined_data <- inner_join(severity,frequency,key="PolicyID")
+```
+
+## Simple linear regression
+
+```{r linear}
+
+fit <- lm(log(ClaimAmount) ~ CarAge + DriverAge + Gas, data=combined_data)
+summary(fit)
+```
+
+Model Fitting
+```{r}
+fit <- lm(log(ClaimAmount) ~ CarAge + DriverAge + Gas, data=combined_data)
+anova(fit)
+```
+
+## Week 5
+Page 20 of GLM
+```{r}
+PoissonCounts <- read_csv("1_data/PoissonClaimCountsSim.csv")
+
+modelfit.glm <- glm(Counts ~ sex + weight + distance + carage+age + I(age^2) + log(age),data = PoissonCounts, family=poisson(), offset=log(exposure))
+
+summary(modelfit.glm)
+```
+```{r}
+anova(modelfit.glm)
+```
+
+```{r}
+reorderedmodel.glm <- glm(Counts ~ carage + weight + age + I(age^2) + log(age) + distance + sex ,data = PoissonCounts, family=poisson(), offset=log(exposure))
+
+summary(reorderedmodel.glm)
+anova(reorderedmodel.glm)
+
+```
+
+Honestly, the reordering made almost no difference.
+
+## Check if Poisson is appropriate
+```{r}
+Pearson.dispersion <- (sum((PoissonCounts$Counts - fitted(reorderedmodel.glm))^2/fitted(reorderedmodel.glm)))/(600000-7-1)
+Pearson.dispersion
+```
+Should be around 1, which it is.
+
+
+```{r}
+xage <- seq(min(PoissonCounts$age),max(PoissonCounts$age),0.5) # just a series of numbers from min to max in 0.5 increments
+
+yage <- predict(reorderedmodel.glm, list(age=xage,
+                                         sex = rep("male", length(xage)),
+                                         carage = rep(mean(PoissonCounts$carage), length(xage)),
+                                         distance = rep(mean(PoissonCounts$distance), length(xage)),
+                                         weight = rep(mean(PoissonCounts$weight), length(xage)),
+                                         exposure = rep(1, length(xage))),type="response")
+
+plot(xage,yage, xlab="age", ylab="intensity")
+```
+Here we've held all other features constant and just varied the age.  We see the way the model has fitted age.  This is because we fitted age and age^2
+
+
+## Training and testing set
+```{r}
+#split intot train and validation sets
+
+trainsample <- sample(c(1:nrow(PoissonCounts)),0.9*nrow(PoissonCounts), replace = FALSE)
+train <- PoissonCounts[trainsample,]
+test <- PoissonCounts[-trainsample,]
+
+glm.train <- glm(Counts~sex+weight+distance+carage+age+I(age^2)+log(age),
+                 data=train,
+                 family=poisson(),offset=log(exposure))
+
+train$fit <- fitted(glm.train)
+test$fit <- predict(glm.train,newdata=test, type="response")
+
+in_sample_error <- 2*(sum(log((train$Counts/train$fit)^train$Counts))-sum(train$Counts)+sum(train$fit))/nrow(train)
+
+cat("in-sample error = ", in_sample_error, "\n")
+```
+```{r}
+out_sample_error <- 2*(sum(log((test$Counts/test$fit)^test$Counts))-sum(test$Counts)+sum(test$fit))/nrow(test)
+cat("out-sample error = ", out_sample_error, "\n")
+
+```
+
+
+## DIMENSION REDUCTION
+Bucketting ages 
+```{r}
+new_data <- PoissonCounts %>%
+  mutate(BucketClass = case_when((age >=18)&(age<26) ~ "age_class1",
+                                 (age >=26)&(age<36) ~ "age_class2",
+                                 (age>=36)&(age<51) ~ "age_class3",
+                                 (age>=51)&(age<61) ~ "age_class4",
+                                 (age>=61)&(age<71) ~ "age_class5",
+                                 (age>=71)&(age<100) ~ "age_class6"))
+
+reduced_data <- new_data %>% 
+  group_by(BucketClass) %>%
+  summarise(CountsAggr = sum(Counts), exposureAggr = sum(exposure))
+
+modelfit.glm <- glm(CountsAggr ~ BucketClass, data = reduced_data, family=poisson(), offset = log(exposureAggr))
+
+summary(modelfit.glm)
+```
+## A better way
+```{r}
+age.class <- cbind(c(18:99), c(rep(1,26-18), rep(2,36-26), rep(3,51-36), rep(4,61-51),rep(5,71-61), rep(6,100-71)))
+#the above creates two columns, first the age, and second the class.  the age starts at 18...the index starts at 1
+PoissonCounts$age.class<-as.factor(age.class[round(PoissonCounts$age)-17,2]) #index is age -17, and chooses second column.
+
+#categorical variables can be releveled
+#PoissonCounts[,"age.class"] <- relevel(PoissonCounts[,"age.class"],ref ="3")
+#no idea what that would do
+
+#now we can do glm on covariates where age covariates are replaced with age.class variable
+modelfit.glm<-glm(Counts~sex+weight+distance+carage+age.class, data=PoissonCounts, 
+                  family=poisson(),offset=log(exposure))
+#we don't do squares and logs, because each age class is separately modelled
+
+summary(modelfit.glm)
+
+```
+
+
+We still have a problem of dimensionality because the # claims is so low that the model variance is really high.  To have confidence in the fit of something that predicts counts, we need a lot of counts...and therfore a lot of data.
+
+IE. UNBALANCE SET??
+
+## do in and out of sample
+```{r}
+trainsample <- sample(c(1:nrow(PoissonCounts)),0.9*nrow(PoissonCounts), replace = FALSE)
+train <- PoissonCounts[trainsample,]
+test <- PoissonCounts[-trainsample,]
+
+glm.train<-glm(Counts~sex+weight+distance+carage+age.class, data=train,
+               family=poisson(), offset=log(exposure))
+
+train$fit <- fitted(glm.train)
+test$fit <- predict(glm.train,newdata=test,type="response")
+
+in_sample_error <- 2*(sum(log((train$Counts/train$fit)^train$Counts))-sum(train$Counts)+sum(train$fit))/nrow(train)
+cat("in sample error", in_sample_error, "\n")
+
+
+```
+
+```{r}
+out_sample_error <- 2*(sum(log((test$Counts/test$fit)^test$Counts))-sum(test$Counts)+sum(test$fit))/nrow(test)
+cat("in sample error", in_sample_error, "\n")
+
+```
+
+## now do k-fold cross validation
+manually
+```{r}
+
+set.seed(100)
+
+PoissonCounts1 <- PoissonCounts
+PoissonCounts1$random <- runif(nrow(PoissonCounts1))
+PoissonCounts1 <- PoissonCounts1[order(PoissonCounts1$random),]
+#ie. we've randomly reordered PoissonCounts
+
+K<-10
+PoissonCounts1$CV <- rep(1:K, length=nrow(PoissonCounts1)) #number off, 1-10
+
+CVerror <- 0
+
+for (k1 in 1:K){
+  PoissonCounts1.train <- PoissonCounts1[which(PoissonCounts1$CV!=k1),]
+  
+  PoissonCounts1.glm <- glm(Counts~sex+weight+distance+carage+age+I(age^2)+log(age),
+                            data = PoissonCounts1.train,
+                            offset = log(exposure), family=poisson())
+  
+  PoissonCounts1.test <- PoissonCounts1[which(PoissonCounts1$CV == k1),]
+  
+  PoissonCounts1.test$fit <- predict(PoissonCounts1.glm, newdata=PoissonCounts1.test, type="response")
+  
+  CVerror <- CVerror + 2*mean(PoissonCounts1.test$fit - PoissonCounts1.test$Counts -                                        log((PoissonCounts1.test$fit/PoissonCounts1.test$Counts)^PoissonCounts1.test$Counts))
+}
+
+CVerror <- CVerror/K
+CVerror
+
+```
+
+Now cross validation using a package
+```{r}
+library (boot)
+
+PoissonCounts.glm <- glm(Counts~sex+weight+distance+carage+age+I(age^2)+log(age),
+                         data = PoissonCounts,
+                         offset = log(exposure), family = poisson())
+
+cost <- function(obs, pred){
+  2*mean(pred-obs + log((obs/pred)^obs))
+}
+
+CVerr<-cv.glm(PoissonCounts, PoissonCounts.glm, cost, K=10)
+CVerr$delta[1]
+```
+wow - the package was slower than the manual version
+
+## Modelling compressed data
+```{r}
+distance.class <- cbind(c(1:99), c(rep(1,11-1), rep(2,21-11), rep(3,31-21), rep(4,51-31),rep(5,100-51)))
+PoissonCounts$distance.class<-as.factor(distance.class[round(PoissonCounts$distance),2])
+
+age.class <- cbind(c(18:99), c(rep(1,26-18), rep(2,36-26), rep(3,51-36), rep(4,61-51),rep(5,71-61), rep(6,100-71)))
+PoissonCounts$age.class<-as.factor(age.class[round(PoissonCounts$age)-17,2])
+
+library(plyr)
+library(dplyr)
+
+PoissonCounts.Compressed <- ddply(PoissonCounts,.(age.class,distance.class), summarise, exposure = sum(exposure), Counts = sum(Counts))
+
+modelfit.glm <- glm(Counts~distance.class+age.class, data=PoissonCounts.Compressed,
+                    family=poisson(), offset=log(exposure))
+summary(modelfit.glm)
+```
+
