@@ -1,0 +1,60 @@
+---
+title: "machine learn"
+author: "Dean Stewart"
+date: "02/04/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Must run describe and easter markdowns first
+
+```{r}
+library(glmnet)
+```
+
+```{r}
+Xdata <- model.matrix(~sex+weight+distance+carage+age+I(age^2)+log(age), data = PoissonCounts)
+glm.ridge <- glmnet(x=Xdata,y=PoissonCounts$Counts, family="poisson", alpha = 0, offset = log(PoissonCounts$exposure))
+glm.predict<-exp(predict(glm.ridge, newx=Xdata,newoffset=log(PoissonCounts$exposure)))  #why isn't this just fitted?
+plot(glm.ridge, xvar="lambda",label="TRUE")
+
+#alpha = 0 makes it ridge  (mean square errors)
+```
+
+```{r}
+cv.ridge <- cv.glmnet(Xdata,PoissonCounts$Counts, type.measure = c("deviance"), family="poisson", alpha=0, offset=log(PoissonCounts$exposure))
+plot(cv.ridge)
+
+```
+The above chart is the error deviance term with different levels of log lambda - Lambda is the reduction coefficient - that is, the penalty placed on the sum of the coefficients.
+
+as you go left to right, the model becomes less flexible, so you increase the bias, but decrease the estimation variance.
+
+
+and if i don't put in the right loss measure and the right family, the results are very different, and evidently, wrong
+```{r}
+cv.ridge <- cv.glmnet(Xdata,PoissonCounts$Counts,alpha=0, offset=log(PoissonCounts$exposure))
+plot(cv.ridge)
+
+```
+
+
+Now Lasso
+```{r}
+glm.lasso <- glmnet(x=Xdata,y=PoissonCounts$Counts, family = "poisson", alpha=1, offset=log((PoissonCounts$exposure)))
+glm.lasso.predict <-exp(predict(glm.lasso, newx=Xdata, newoffset = log(PoissonCounts$exposure)))
+plot(glm.lasso, xvar="lambda", label="TRUE")
+
+#alpha = 1 makes it lasso (mean absolute errors)
+```
+
+And cross variance
+```{r}
+cv.lasso <- cv.glmnet(Xdata, PoissonCounts$Counts, type.measure = c("deviance"), family="poisson", alpha=1, offset=log(PoissonCounts$exposure))
+plot(cv.lasso)
+```
+
